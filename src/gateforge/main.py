@@ -8,13 +8,17 @@ from gateforge.api.health import router as health_router
 from gateforge.api.v1.keys import router as keys_router
 from gateforge.core.config import Settings, get_settings
 from gateforge.core.logging import setup_logging
+from gateforge.core.redis import close_redis_pool
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager for startup and graceful shutdown hooks."""
     setup_logging()
-    yield
+    try:
+        yield
+    finally:
+        await close_redis_pool()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
