@@ -4,15 +4,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from gateforge.api.health import router as health_router
 from gateforge.core.config import Settings, get_settings
+from gateforge.core.logging import setup_logging
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager for startup and graceful shutdown hooks."""
-    # Startup hooks: DB pools and Redis connection pools will be attached here
+    setup_logging()
     yield
-    # Shutdown hooks: Graceful pool teardown will execute here
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -37,6 +38,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Register core routers
+    app.include_router(health_router)
 
     return app
 
