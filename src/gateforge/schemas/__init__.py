@@ -17,6 +17,7 @@ from gateforge.schemas.gateway import (
     GatewayEchoResponse,
     GatewayVerifyResponse,
 )
+from gateforge.schemas.quota import QuotaUtilization
 from gateforge.schemas.ratelimit import RateLimitDecision
 from gateforge.schemas.telemetry import RequestTelemetry
 
@@ -34,4 +35,5 @@ __all__ = [
     "AnalyticsOverview",
     "TimeSeriesPoint",
     "AnalyticsTimeSeriesResponse",
+    "QuotaUtilization",
 ]
