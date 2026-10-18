@@ -13,6 +13,7 @@ from gateforge.schemas.gateway import (
     GatewayVerifyResponse,
 )
 from gateforge.schemas.ratelimit import RateLimitDecision
+from gateforge.schemas.telemetry import RequestTelemetry
 
 __all__ = [
     "APIKeyCreateRequest",
@@ -24,4 +25,5 @@ __all__ = [
     "GatewayEchoRequest",
     "GatewayEchoResponse",
     "RateLimitDecision",
+    "RequestTelemetry",
 ]
