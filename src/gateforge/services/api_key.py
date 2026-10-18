@@ -54,6 +54,18 @@ class APIKeyService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_hash(session: AsyncSession, raw_or_hashed_key: str) -> APIKey | None:
+        """Fetch an API key record by raw token or precomputed SHA-256 hash regardless of status."""
+        key_hash = (
+            raw_or_hashed_key
+            if len(raw_or_hashed_key) == 64 and not raw_or_hashed_key.startswith("gfg_")
+            else hash_api_key(raw_or_hashed_key)
+        )
+        query = select(APIKey).where(APIKey.key_hash == key_hash)
+        result = await session.execute(query)
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_active_by_hash(session: AsyncSession, raw_or_hashed_key: str) -> APIKey | None:
         """Look up an active, non-expired API key by raw token or precomputed SHA-256 hash."""
         # If input is raw token (longer than 64 hex characters or starts with prefix), hash it
