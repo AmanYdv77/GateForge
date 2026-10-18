@@ -1,11 +1,15 @@
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateforge.core.security import generate_api_key, hash_api_key
 from gateforge.models.api_key import APIKey
+
+if TYPE_CHECKING:
+    from gateforge.services.auth_cache import AuthCacheService
 
 
 class APIKeyService:
@@ -68,7 +72,6 @@ class APIKeyService:
     @staticmethod
     async def get_active_by_hash(session: AsyncSession, raw_or_hashed_key: str) -> APIKey | None:
         """Look up an active, non-expired API key by raw token or precomputed SHA-256 hash."""
-        # If input is raw token (longer than 64 hex characters or starts with prefix), hash it
         key_hash = (
             raw_or_hashed_key
             if len(raw_or_hashed_key) == 64 and not raw_or_hashed_key.startswith("gfg_")
@@ -108,8 +111,12 @@ class APIKeyService:
         return list(result.scalars().all())
 
     @staticmethod
-    async def revoke_key(session: AsyncSession, key_id: uuid.UUID) -> APIKey | None:
-        """Revoke an active API key immediately and record revocation timestamp."""
+    async def revoke_key(
+        session: AsyncSession,
+        key_id: uuid.UUID,
+        cache_service: "AuthCacheService | None" = None,
+    ) -> APIKey | None:
+        """Revoke an active API key immediately, purge its cached identity, and record timestamp."""
         api_key = await APIKeyService.get_by_id(session, key_id)
         if api_key is None:
             return None
@@ -119,5 +126,8 @@ class APIKeyService:
 
         await session.commit()
         await session.refresh(api_key)
+
+        if cache_service is not None:
+            await cache_service.invalidate_key_by_hash(api_key.key_hash)
 
         return api_key

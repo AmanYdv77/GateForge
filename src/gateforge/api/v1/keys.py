@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gateforge.api.dependencies.auth import get_auth_cache_service
 from gateforge.api.deps import get_current_user
 from gateforge.core.database import get_db_session
 from gateforge.models.user import User
@@ -12,6 +13,7 @@ from gateforge.schemas.api_key import (
     APIKeyResponse,
 )
 from gateforge.services.api_key import APIKeyService
+from gateforge.services.auth_cache import AuthCacheService
 
 router = APIRouter(prefix="/keys", tags=["API Keys Management"])
 
@@ -125,8 +127,9 @@ async def revoke_api_key(
     key_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
+    cache_service: AuthCacheService = Depends(get_auth_cache_service),
 ) -> APIKeyResponse:
-    """Instantly revoke an API key."""
+    """Instantly revoke an API key and purge its cached entry."""
     key = await APIKeyService.get_by_id(session=db, key_id=key_id)
     if key is None or key.user_id != current_user.id:
         raise HTTPException(
@@ -134,7 +137,11 @@ async def revoke_api_key(
             detail="API Key not found or access denied",
         )
 
-    revoked_key = await APIKeyService.revoke_key(session=db, key_id=key_id)
+    revoked_key = await APIKeyService.revoke_key(
+        session=db,
+        key_id=key_id,
+        cache_service=cache_service,
+    )
     assert revoked_key is not None
 
     return APIKeyResponse(
