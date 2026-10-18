@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from gateforge.api.health import router as health_router
+from gateforge.api.middleware.telemetry import TelemetryMiddleware
 from gateforge.api.v1.gateway import router as gateway_router
 from gateforge.api.v1.keys import router as keys_router
 from gateforge.core.config import Settings, get_settings
@@ -44,6 +45,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Register high-precision request timing and telemetry middleware
+    app.add_middleware(TelemetryMiddleware)
 
     # Register core routers
     app.include_router(health_router)

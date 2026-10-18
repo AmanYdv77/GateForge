@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateforge.api.dependencies.api_key_header import extract_raw_api_key
@@ -33,6 +33,7 @@ def get_auth_cache_service() -> AuthCacheService:
 
 
 async def get_current_api_key(
+    request: Request = None,  # type: ignore[assignment]
     raw_key: str = Depends(extract_raw_api_key),
     db: AsyncSession = Depends(get_db_session),
     cache_service: AuthCacheService = Depends(get_auth_cache_service),
@@ -56,6 +57,10 @@ async def get_current_api_key(
             )
 
         logger.debug("auth_cache_hit", key_id=str(cached.key_id))
+        if request is not None:
+            request.state.api_key_id = cached.key_id
+            request.state.user_id = cached.user_id
+
         return AuthenticatedKey(
             key_id=cached.key_id,
             user_id=cached.user_id,
@@ -108,6 +113,10 @@ async def get_current_api_key(
         expires_at=api_key_entity.expires_at,
     )
     await cache_service.set_cached_key(key_hash, cache_payload)
+
+    if request is not None:
+        request.state.api_key_id = api_key_entity.id
+        request.state.user_id = api_key_entity.user_id
 
     return AuthenticatedKey(
         key_id=api_key_entity.id,
