@@ -7,7 +7,11 @@ from gateforge.schemas.cache import (
     CachedKeyData,
     build_auth_cache_key,
 )
-from gateforge.schemas.gateway import GatewayVerifyResponse
+from gateforge.schemas.gateway import (
+    GatewayEchoRequest,
+    GatewayEchoResponse,
+    GatewayVerifyResponse,
+)
 from gateforge.schemas.ratelimit import RateLimitDecision
 
 __all__ = [
@@ -17,5 +21,7 @@ __all__ = [
     "CachedKeyData",
     "build_auth_cache_key",
     "GatewayVerifyResponse",
+    "GatewayEchoRequest",
+    "GatewayEchoResponse",
     "RateLimitDecision",
 ]
