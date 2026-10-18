@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from gateforge.api.health import router as health_router
+from gateforge.api.v1.gateway import router as gateway_router
 from gateforge.api.v1.keys import router as keys_router
 from gateforge.core.config import Settings, get_settings
 from gateforge.core.logging import setup_logging
@@ -47,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Register core routers
     app.include_router(health_router)
     app.include_router(keys_router, prefix="/api/v1")
+    app.include_router(gateway_router, prefix="/api/v1")
 
     return app
 
