@@ -7,6 +7,10 @@ from gateforge.api.dependencies.auth import (
     get_auth_cache_service,
     get_current_api_key,
 )
+from gateforge.api.dependencies.ratelimit import (
+    enforce_rate_limit,
+    get_rate_limiter,
+)
 
 __all__ = [
     "api_key_header_scheme",
@@ -14,4 +18,6 @@ __all__ = [
     "AuthenticatedKey",
     "get_auth_cache_service",
     "get_current_api_key",
+    "enforce_rate_limit",
+    "get_rate_limiter",
 ]
