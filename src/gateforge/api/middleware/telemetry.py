@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from gateforge.core.metrics import record_request_metric
 from gateforge.core.telemetry_queue import get_telemetry_queue
 from gateforge.schemas.telemetry import RequestTelemetry
 
@@ -14,6 +15,7 @@ logger = structlog.get_logger(__name__)
 EXCLUDED_PATHS: frozenset[str] = frozenset({
     "/health/live",
     "/health/ready",
+    "/metrics",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -21,7 +23,7 @@ EXCLUDED_PATHS: frozenset[str] = frozenset({
 
 
 class TelemetryMiddleware(BaseHTTPMiddleware):
-    """High-precision request timing and non-blocking telemetry ingestion middleware."""
+    """High-precision request timing, Prometheus metrics, and non-blocking telemetry ingestion middleware."""
 
     async def dispatch(
         self,
@@ -41,6 +43,12 @@ class TelemetryMiddleware(BaseHTTPMiddleware):
         except Exception:
             latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
             self._record_telemetry(request, request_id, 500, latency_ms)
+            record_request_metric(
+                method=request.method,
+                endpoint=request.url.path,
+                status_code=500,
+                duration_seconds=latency_ms / 1000.0,
+            )
             raise
 
         # 3. Calculate latency in milliseconds
@@ -50,8 +58,14 @@ class TelemetryMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time"] = f"{latency_ms:.2f}ms"
 
-        # 5. Non-blocking telemetry buffering
+        # 5. Non-blocking telemetry buffering and Prometheus tracking
         self._record_telemetry(request, request_id, status_code, latency_ms)
+        record_request_metric(
+            method=request.method,
+            endpoint=request.url.path,
+            status_code=status_code,
+            duration_seconds=latency_ms / 1000.0,
+        )
 
         return response
 
