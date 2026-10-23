@@ -51,6 +51,12 @@ class APIKey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         doc="Granted granular permissions (e.g. read:reports, write:orders)",
     )
+    allowed_ips: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False,
+        doc="Enterprise IP allowlist containing CIDR blocks or single IPs (e.g. 192.168.1.0/24)",
+    )
     custom_rate_limit_rpm: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,

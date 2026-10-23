@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateforge.api.dependencies.api_key_header import extract_raw_api_key
 from gateforge.core.database import get_db_session
+from gateforge.core.ip_filter import evaluate_ip_access
 from gateforge.core.security import hash_api_key
 from gateforge.schemas.cache import CachedKeyData
 from gateforge.services.api_key import APIKeyService
@@ -25,6 +26,7 @@ class AuthenticatedKey:
     scopes: list[str]
     rate_limit_rpm: int
     cache_hit: bool
+    allowed_ips: list[str] = field(default_factory=list)
 
 
 def get_auth_cache_service() -> AuthCacheService:
@@ -56,6 +58,9 @@ async def get_current_api_key(
                 headers={"WWW-Authenticate": "ApiKey"},
             )
 
+        # Enterprise CIDR / IP allowlisting evaluation
+        evaluate_ip_access(request, cached.allowed_ips or [])
+
         logger.debug("auth_cache_hit", key_id=str(cached.key_id))
         if request is not None:
             request.state.api_key_id = cached.key_id
@@ -67,6 +72,7 @@ async def get_current_api_key(
             scopes=cached.scopes,
             rate_limit_rpm=cached.rate_limit_rpm,
             cache_hit=True,
+            allowed_ips=cached.allowed_ips or [],
         )
 
     # 2. Tier 2: Cache miss or Redis degraded -> Fallback to PostgreSQL
@@ -101,6 +107,11 @@ async def get_current_api_key(
                 headers={"WWW-Authenticate": "ApiKey"},
             )
 
+    entity_allowed_ips = list(api_key_entity.allowed_ips or [])
+
+    # Enterprise CIDR / IP allowlisting evaluation
+    evaluate_ip_access(request, entity_allowed_ips)
+
     rate_limit = api_key_entity.custom_rate_limit_rpm or 60
 
     # Warm Redis cache asynchronously for subsequent edge requests
@@ -109,6 +120,7 @@ async def get_current_api_key(
         user_id=api_key_entity.user_id,
         is_active=api_key_entity.is_active,
         scopes=list(api_key_entity.scopes),
+        allowed_ips=entity_allowed_ips,
         rate_limit_rpm=rate_limit,
         expires_at=api_key_entity.expires_at,
     )
@@ -124,4 +136,5 @@ async def get_current_api_key(
         scopes=list(api_key_entity.scopes),
         rate_limit_rpm=rate_limit,
         cache_hit=False,
+        allowed_ips=entity_allowed_ips,
     )

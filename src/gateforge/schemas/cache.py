@@ -18,6 +18,10 @@ class CachedKeyData(BaseModel):
     user_id: UUID = Field(description="Owner user identifier")
     is_active: bool = Field(default=True, description="Active status flag")
     scopes: list[str] = Field(default_factory=list, description="Authorized permission scopes")
+    allowed_ips: list[str] = Field(
+        default_factory=list,
+        description="Enterprise IP allowlist containing CIDR blocks or single IPs",
+    )
     rate_limit_rpm: int = Field(default=60, ge=1, description="Assigned rate limit in RPM")
     expires_at: datetime | None = Field(default=None, description="Optional UTC expiration timestamp")
 
