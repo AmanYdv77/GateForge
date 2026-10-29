@@ -1,68 +1,131 @@
-# GateForge 🛡️
+# GateForge: High-Throughput API Key Gateway & Sliding-Window Rate Limiter
 
-> High-Throughput API Key Lifecycle Manager, Sub-Millisecond Gateway Auth & Distributed Sliding-Window Rate Limiter.
+[![CI/CD Pipeline](https://github.com/AmanYdv77/GateForge/actions/workflows/ci.yml/badge.svg)](https://github.com/AmanYdv77/GateForge/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![Redis](https://img.shields.io/badge/Redis-7.0+-DC382D.svg)](https://redis.io)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org)
+[![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C.svg)](https://prometheus.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-GateForge is a production-engineered backend system built to solve the key lifecycle, sub-millisecond edge authentication, and distributed rate limiting requirements of modern developer APIs (modeled after architecture patterns from Stripe, Cloudflare, and AWS API Gateway).
-
----
-
-## ⚡ Core Architecture & Engineering Highlights
-
-- **Cryptographic Key Lifecycle:** Prefixed (`gfg_live_...`), SHA-256 deterministically hashed tokens with masked prefix/suffix storage and zero plaintext secret exposure.
-- **Sub-Millisecond Edge Authentication:** Read-through Redis caching with stampede prevention and event-driven cache invalidation on key revocation.
-- **Atomic Sliding-Window Rate Limiter:** Zero-race-condition rate limiting powered by atomic Redis Lua scripts evaluating rolling sliding-window logs with full RFC 6585 compliance (`X-RateLimit-*`, `Retry-After`).
-- **Asynchronous Telemetry & Analytics:** Non-blocking fire-and-forget usage logging with periodic rollups for developer dashboards.
-- **Engineered for Concurrency:** Strict async SQLAlchemy 2.0 connection pooling, Redis connection multiplexing, and robust error handling.
+GateForge is a distributed, production-grade API key lifecycle manager, edge authentication gateway, sliding-window rate limiter, and async telemetry engine designed for low-latency, mission-critical infrastructure.
 
 ---
 
-## 🛠️ Technology Stack
+## Key Highlights
 
-- **Core Framework:** Python 3.12, FastAPI, Pydantic v2, Pydantic-Settings
-- **Database & ORM:** PostgreSQL 15, SQLAlchemy 2.0 (AsyncIO), Asyncpg, Alembic
-- **Caching & Rate Limiting:** Redis 7 (Alpine), Redis Lua scripts, Hiredis parser
-- **Telemetry & Logging:** Structlog (structured JSON with Correlation IDs)
-- **Quality Assurance & Testing:** Pytest, Pytest-Asyncio, Ruff, Mypy (strict), Locust (load testing)
+- **Sub-Millisecond Edge Authentication:** Two-tier architecture with Redis edge cache (<1ms lookup) backed by PostgreSQL async read-through fallback.
+- **Zero Plaintext Secret Storage:** API keys are generated with high-entropy cryptographic randomness (`gfg_live_...`), hashed via SHA-256 for storage, and never persisted in plaintext.
+- **Atomic Sliding-Window Rate Limiting:** Enforces quotas with millisecond precision via an atomic Redis Lua script, eliminating burst-at-boundary vulnerabilities. Returns RFC 6585 headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`).
+- **Enterprise IP & CIDR Allowlisting:** Restrict API keys to specific corporate CIDRs (`192.168.1.0/24`) or static IP addresses with proxy chain extraction.
+- **Asynchronous Telemetry Engine:** Non-blocking in-memory queue drains request metrics into PostgreSQL batches without impacting request latency.
+- **Full Observability:** Live `/metrics` endpoint with Prometheus collectors for request throughput, sub-millisecond duration histograms, and cache hit/miss rates.
+- **Resilience & Failover:** Circuit breaker pattern preventing cascading outages on Redis or Database degradation.
 
 ---
 
-## 📁 Repository Structure
+## Architecture Overview
 
-```text
-├── AGENTS.md                 # Agent governance & CLI protocol
-├── DESIGN.md                 # Technical RFC & architectural specification
-├── docker-compose.yml        # PostgreSQL 15 & Redis 7 services
-├── pyproject.toml            # Dependencies and tool configurations
-├── .env.example              # Environment variables template
-├── src/
-│   └── gateforge/
-│       ├── core/             # Config, logging, security, database session
-│       ├── models/           # SQLAlchemy 2.0 declarative models
-│       ├── schemas/          # Pydantic validation & transfer schemas
-│       ├── services/         # Key lifecycle, cache, and limiter services
-│       ├── api/              # FastAPI routers, middleware, and dependencies
-│       └── main.py           # Application factory and lifespan handler
-├── tests/                    # Pytest test suite (unit, integration, concurrency)
-└── docs/                     # Interview defense briefs and architecture guides
+```
+Client Request ---> [ GateForge Gateway ]
+                           |
+            +--------------+--------------+
+            |                             |
+      (Tier 1 Cache)                (Tier 2 DB)
+     Redis Edge RAM            PostgreSQL Storage
+      [ < 1ms Latency ]         [ SHA-256 Hash ]
+            |                             |
+            +--------------+--------------+
+                           |
+               [ IP & CIDR Filter ]
+                           |
+            [ Redis Lua Rate Limiter ]
+                           |
+             [ Non-Blocking Telemetry ]
+                           |
+                     Downstream API
 ```
 
 ---
 
-## 🚀 Quickstart (Development)
+## Quickstart with Docker Compose
+
+Spin up the entire GateForge stack (Gateway, PostgreSQL 15, Redis 7, Prometheus) with a single command:
 
 ```bash
-# 1. Clone & create virtual environment
-python -m venv .venv
-.venv\Scripts\activate   # Windows PowerShell: .venv\Scripts\Activate.ps1
+# Clone the repository
+git clone https://github.com/AmanYdv77/GateForge.git
+cd GateForge
 
-# 2. Install dependencies
-pip install -e ".[dev]"
+# Copy environment configuration
+cp .env.example .env
 
-# 3. Spin up PostgreSQL & Redis
-docker compose up -d
-
-# 4. Run tests & static analysis
-pytest
-ruff check .
-mypy src
+# Launch services
+docker compose up -d --build
 ```
+
+Verify service health:
+```bash
+curl -i http://localhost:8000/health/live
+# HTTP/1.1 200 OK
+# {"status":"alive","version":"0.1.0"}
+```
+
+Access Prometheus metrics:
+```bash
+curl -i http://localhost:8000/metrics
+```
+
+---
+
+## Administrative CLI Utility
+
+GateForge includes a built-in CLI for administrative operations:
+
+```bash
+# Create a new key with IP allowlisting and custom rate limits
+python -m gateforge.cli create-key \
+  --name "Analytics Production Client" \
+  --user-id "00000000-0000-0000-0000-000000000001" \
+  --scopes "read:analytics,read:reports" \
+  --allowed-ips "192.168.1.0/24,10.0.0.1" \
+  --rate-limit 120
+
+# Revoke a key instantly and purge edge cache
+python -m gateforge.cli revoke-key --key-id "<KEY_UUID>"
+
+# Check database and Redis cache connectivity
+python -m gateforge.cli status
+```
+
+---
+
+## Running Tests & Static Analysis
+
+```bash
+# Run complete test suite (130+ unit & integration tests)
+pytest -v
+
+# Run static type checking with strict Mypy
+mypy src
+
+# Run fast code formatting & linting with Ruff
+ruff check .
+```
+
+---
+
+## Benchmark & Load Testing
+
+Run Locust load tests simulating thousands of concurrent requests:
+
+```bash
+locust -f benchmarks/locustfile.py --headless -u 100 -r 10 --run-time 1m --host http://localhost:8000
+```
+
+---
+
+## Documentation
+
+- [System Architecture & Sequence Diagrams](docs/architecture.md)
+- [Security Threat Model & Cryptographic Guarantees](docs/security.md)
